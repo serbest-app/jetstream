@@ -1,4 +1,4 @@
-package segment
+package format
 
 import (
 	"encoding/binary"
@@ -237,7 +237,7 @@ func (e eventColumns) TotalPayloadsLen() int {
 
 // encodeBlock writes the uncompressed columnar body for the given
 // events. Callers must pass at least one event; the compaction rewrite
-// path uses encodeEmptyBlock for the explicit zero-event-block format.
+// path uses EncodeEmptyBlock for the explicit zero-event-block format.
 // Events must be validated before this call.
 func encodeBlock(events []Event) ([]byte, error) {
 	if len(events) == 0 {
@@ -247,7 +247,7 @@ func encodeBlock(events []Event) ([]byte, error) {
 	return encodeBlockColumns(eventColumns(events)), nil
 }
 
-func encodeEmptyBlock() []byte {
+func EncodeEmptyBlock() []byte {
 	return []byte{0, 0, 0, 0}
 }
 
@@ -258,12 +258,12 @@ func encodeEmptyBlock() []byte {
 // slice; the future Reader type will promote it to a public sentinel.
 var errTruncatedBlock = errors.New("segment: truncated or malformed block")
 
-// maxBlockEventsLimit is a hard ceiling on the event_count header.
+// MaxBlockEventsLimit is a hard ceiling on the event_count header.
 // It is well above the configurable default (4096) but well below
 // the int32 ceiling (2_147_483_647) that would otherwise trip
 // int(nEvents64) on a 32-bit build. It also caps the up-front
 // allocation a hostile header can force.
-const maxBlockEventsLimit = 1 << 18 // 262,144
+const MaxBlockEventsLimit = 1 << 18 // 262,144
 
 // decodeBlock reverses encodeBlock and validates lengths before allocating.
 //
@@ -286,7 +286,7 @@ func decodeBlock(buf []byte) ([]Event, error) {
 	// fixedPerEvent bytes per event before any variable-length
 	// data; if the remaining input can't cover that, the header is
 	// lying.
-	if nEvents64 > maxBlockEventsLimit {
+	if nEvents64 > MaxBlockEventsLimit {
 		return nil, errTruncatedBlock
 	}
 	if uint64(len(buf)-off) < nEvents64*fixedPerEvent {

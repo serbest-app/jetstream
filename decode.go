@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bluesky-social/jetstream/segment"
+	"github.com/bluesky-social/jetstream/segment/format"
 	"github.com/jcalabro/atmos/api/comatproto"
 	"github.com/jcalabro/atmos/cbor"
 )
@@ -17,11 +17,11 @@ import (
 // uses decodeSegmentEventInto with a per-block Commit slab to avoid one heap
 // allocation per commit.
 //
-// segment.Event strings and payloads alias a shared decompressed block buffer,
+// format.Event strings and payloads alias a shared decompressed block buffer,
 // so the returned Event is decoded from an owned copy of the row.
-func decodeSegmentEvent(ev *segment.Event) (Event, error) {
+func decodeSegmentEvent(ev *format.Event) (Event, error) {
 	var commit Commit
-	rows := []segment.Event{*ev}
+	rows := []format.Event{*ev}
 	ownRows(rows)
 	return decodeSegmentEventInto(&rows[0], &commit, recordDecodeMode{})
 }
@@ -38,7 +38,7 @@ func decodeSegmentEvent(ev *segment.Event) (Event, error) {
 // The returned Event references ev's strings and payload directly, so unless
 // mode aliases the block on purpose (WithRawRecords), ev must already have been
 // copied out of the decompressed block by ownRows.
-func decodeSegmentEventInto(ev *segment.Event, commit *Commit, mode recordDecodeMode) (Event, error) {
+func decodeSegmentEventInto(ev *format.Event, commit *Commit, mode recordDecodeMode) (Event, error) {
 	out := Event{
 		DID:           ev.DID,
 		Seq:           ev.Seq,
@@ -46,27 +46,27 @@ func decodeSegmentEventInto(ev *segment.Event, commit *Commit, mode recordDecode
 		WitnessedAtUS: ev.WitnessedAt,
 	}
 	switch ev.Kind {
-	case segment.KindCreate, segment.KindUpdate, segment.KindDelete, segment.KindCreateResync:
+	case format.KindCreate, format.KindUpdate, format.KindDelete, format.KindCreateResync:
 		if err := decodeCommitInto(ev, commit, mode); err != nil {
 			return Event{}, err
 		}
 		out.Kind = KindCommit
 		out.Commit = commit
-	case segment.KindIdentity:
+	case format.KindIdentity:
 		id, err := decodeIdentity(ev)
 		if err != nil {
 			return Event{}, err
 		}
 		out.Kind = KindIdentity
 		out.Identity = id
-	case segment.KindAccount:
+	case format.KindAccount:
 		acct, err := decodeAccount(ev)
 		if err != nil {
 			return Event{}, err
 		}
 		out.Kind = KindAccount
 		out.Account = acct
-	case segment.KindSync:
+	case format.KindSync:
 		sync, err := decodeSync(ev)
 		if err != nil {
 			return Event{}, err
@@ -86,7 +86,7 @@ func decodeSegmentEventInto(ev *segment.Event, commit *Commit, mode recordDecode
 // 40-DID backfill). The rows' identifier strings share one allocation, which
 // costs one allocation per block and pins only these rows' identifiers; each
 // payload is cloned separately, so retaining one record pins only that record.
-func ownRows(rows []segment.Event) {
+func ownRows(rows []format.Event) {
 	n := 0
 	for i := range rows {
 		ev := &rows[i]
@@ -122,9 +122,9 @@ func ownRows(rows []segment.Event) {
 // decodeCommit decodes a commit row into a freshly-allocated *Commit. The hot
 // path uses decodeCommitInto with a slab slot; this allocating form is kept for
 // tests and single-event callers.
-func decodeCommit(ev *segment.Event) (*Commit, error) {
+func decodeCommit(ev *format.Event) (*Commit, error) {
 	commit := &Commit{}
-	rows := []segment.Event{*ev}
+	rows := []format.Event{*ev}
 	ownRows(rows)
 	if err := decodeCommitInto(&rows[0], commit, recordDecodeMode{}); err != nil {
 		return nil, err
@@ -144,14 +144,14 @@ func decodeCommit(ev *segment.Event) (*Commit, error) {
 // (ownRows) unless mode aliases the block on purpose (WithRawRecords). That
 // alias is safe because the decompressed block outlives the batch; its contract
 // is valid for the batch lifetime, copy to retain.
-func decodeCommitInto(ev *segment.Event, commit *Commit, mode recordDecodeMode) error {
+func decodeCommitInto(ev *format.Event, commit *Commit, mode recordDecodeMode) error {
 	*commit = Commit{
 		Operation:  commitOperation(ev.Kind),
 		Collection: ev.Collection,
 		Rkey:       ev.Rkey,
 		Rev:        ev.Rev,
 	}
-	if ev.Kind == segment.KindDelete {
+	if ev.Kind == format.KindDelete {
 		return nil
 	}
 
@@ -279,20 +279,20 @@ func jsonShapeMap(m map[string]any) bool {
 	return true
 }
 
-func commitOperation(k segment.Kind) Operation {
+func commitOperation(k format.Kind) Operation {
 	switch k {
-	case segment.KindCreate, segment.KindCreateResync:
+	case format.KindCreate, format.KindCreateResync:
 		return OpCreate
-	case segment.KindUpdate:
+	case format.KindUpdate:
 		return OpUpdate
-	case segment.KindDelete:
+	case format.KindDelete:
 		return OpDelete
 	default:
 		return ""
 	}
 }
 
-func decodeIdentity(ev *segment.Event) (*Identity, error) {
+func decodeIdentity(ev *format.Event) (*Identity, error) {
 	var id comatproto.SyncSubscribeRepos_Identity
 	if err := id.UnmarshalCBOR(ev.Payload); err != nil {
 		return nil, fmt.Errorf("jetstream: decode identity (did=%s seq=%d): %w", ev.DID, ev.Seq, err)
@@ -305,7 +305,7 @@ func decodeIdentity(ev *segment.Event) (*Identity, error) {
 	}, nil
 }
 
-func decodeAccount(ev *segment.Event) (*Account, error) {
+func decodeAccount(ev *format.Event) (*Account, error) {
 	var acct comatproto.SyncSubscribeRepos_Account
 	if err := acct.UnmarshalCBOR(ev.Payload); err != nil {
 		return nil, fmt.Errorf("jetstream: decode account (did=%s seq=%d): %w", ev.DID, ev.Seq, err)
@@ -319,7 +319,7 @@ func decodeAccount(ev *segment.Event) (*Account, error) {
 	}, nil
 }
 
-func decodeSync(ev *segment.Event) (*Sync, error) {
+func decodeSync(ev *format.Event) (*Sync, error) {
 	var sync comatproto.SyncSubscribeRepos_Sync
 	if err := sync.UnmarshalCBOR(ev.Payload); err != nil {
 		return nil, fmt.Errorf("jetstream: decode sync (did=%s seq=%d): %w", ev.DID, ev.Seq, err)

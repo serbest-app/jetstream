@@ -31,6 +31,8 @@ cmd/
   jetstream/      main binary: serve, inspect-segment, version
   simulator/      local PLC + PDS + Relay on :7777
 segment/          on-disk segment file format (header, blocks, footer, reader, writer, sealer); public API
+  format/         the block format without file I/O, for clients; aliases of internal/format
+  internal/format/ the block format itself (events, blocks, BlockBuilder, header, block index)
 internal/
   ingest/         the segment Writer (append/flush/seal, seq, readable log)
     backfill/     initial full-network backfill (listRepos + getRepo)
@@ -71,8 +73,8 @@ Frequently useful beyond what's in the README:
 
 ```sh
 just test ./segment -run TestX  # one test (gotestsum forwards args after `--`)
-just bench ./segment            # benchmarks
-just fuzz 30s ./segment         # fuzz every Fuzz* target for 30s each
+just bench ./segment/...       # benchmarks
+just fuzz 30s ./segment/...     # fuzz every Fuzz* target for 30s each
 just modernize                  # apply gopls modernize rewrites
 just up / just down             # ephemeral Postgres + SeaweedFS + MinIO (compose.yaml, testing/devenv/)
 ```
@@ -141,11 +143,11 @@ Use the package-level metrics/tracer rather than rolling your own. `obs.Tracer("
 | If you changed… | Also run |
 |---|---|
 | anything | `just` (lint + short tests) — always |
-| segment format, ingest, orchestrator, cursor, or restart/recovery | `just test-long ./internal/oracle`, `just oracle-sweep`, and the relevant fuzz targets (`just fuzz 30s ./segment`) — short tests skip the crash/restart and stress oracle coverage |
+| segment format, ingest, orchestrator, cursor, or restart/recovery | `just test-long ./internal/oracle`, `just oracle-sweep`, and the relevant fuzz targets (`just fuzz 30s ./segment/...`) — short tests skip the crash/restart and stress oracle coverage |
 | the oracle, simulator, or mutation catalog | `just test ./internal/oracle`, then re-run the mutation campaign (`just mutation-campaign`) and check the scorecard didn't regress |
 | anything that could move a mutant's target code | `just mutation-gate` — but on a **clean working tree**: the driver applies/reverts patches with git and aborts on a dirty tree (see `specs/gotchas.md`) |
 | parsing of untrusted input (frames, CARs, CSV) | the matching fuzz target (`just fuzz`), plus a corpus check if `internal/corpus` is affected |
 | lexicon-derived code | `just lexgen` and confirm no drift |
-| hot-path code (segment writer/sealer) | `just bench ./segment` and compare against the baseline |
+| hot-path code (segment writer/sealer) | `just bench ./segment/...` and compare against the baseline |
 
 When in doubt, `specs/oracle.md` explains which tier catches which class of bug.

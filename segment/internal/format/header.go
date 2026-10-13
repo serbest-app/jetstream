@@ -1,4 +1,4 @@
-package segment
+package format
 
 import (
 	"bytes"
@@ -8,6 +8,27 @@ import (
 
 	"github.com/zeebo/xxh3"
 )
+
+const (
+	// The default number of events to store in a single segment block. This
+	// value is just the default, and is configurable by the user.
+	DefaultMaxEventsPerBlock = 4096
+
+	// ReservedHeaderBytes is the size of the fixed header at the start
+	// of every segment file (docs/README.md §3.1.2). The first len(SegmentMagic)
+	// bytes are the magic; the remainder is zero-filled placeholder until
+	// Seal populates the finalized header. ReservedHeaderBytes is also
+	// the byte offset at which the framed-block region begins.
+	//
+	// Exported so callers that own the active-segment lifecycle (e.g.
+	// internal/ingest) can compute byte offsets without duplicating the
+	// constant.
+	ReservedHeaderBytes = 256
+)
+
+// SegmentMagic is written at offset 0 of every segment file at
+// creation time; it identifies the file as a jetstream segment.
+var SegmentMagic = []byte("jss0")
 
 // Header is the parsed form of the 256-byte fixed header at offset 0
 // of every sealed segment file. See docs/README.md §3.1.2 for the wire
@@ -30,18 +51,18 @@ type Header struct {
 	Checksum              uint64
 }
 
-// currentHeaderVersion is the only version produced by this package.
-// decodeHeader accepts only this exact version; older or newer files
+// CurrentHeaderVersion is the only version produced by this package.
+// DecodeHeader accepts only this exact version; older or newer files
 // land via a future migration path.
-const currentHeaderVersion uint16 = 1
+const CurrentHeaderVersion uint16 = 1
 
-// encodeHeader serializes h into a freshly-allocated 256-byte slice.
+// EncodeHeader serializes h into a freshly-allocated 256-byte slice.
 // Bytes 0..3 are the magic; bytes 4..11 are the checksum; bytes
 // 12..97 are the metadata fields; bytes 98..255 are zero-filled
 // reserved padding.
-func encodeHeader(h Header) []byte {
+func EncodeHeader(h Header) []byte {
 	buf := make([]byte, ReservedHeaderBytes)
-	copy(buf[0:4], segmentMagic)
+	copy(buf[0:4], SegmentMagic)
 	le := binary.LittleEndian
 	le.PutUint64(buf[4:12], h.Checksum)
 	le.PutUint16(buf[12:14], h.Version)
@@ -61,20 +82,20 @@ func encodeHeader(h Header) []byte {
 	return buf
 }
 
-// decodeHeader parses a 256-byte slice into Header. It validates:
+// DecodeHeader parses a 256-byte slice into Header. It validates:
 //   - length == ReservedHeaderBytes
 //   - magic == "jss0"
 //   - checksum field is non-zero (zero means "active file"; our
-//     contract is that decodeHeader is only ever fed sealed-file bytes)
-//   - version == currentHeaderVersion
+//     contract is that DecodeHeader is only ever fed sealed-file bytes)
+//   - version == CurrentHeaderVersion
 //
-// On any failure decodeHeader returns a sentinel-wrapped error.
-func decodeHeader(buf []byte) (Header, error) {
+// On any failure DecodeHeader returns a sentinel-wrapped error.
+func DecodeHeader(buf []byte) (Header, error) {
 	if len(buf) != ReservedHeaderBytes {
 		return Header{}, fmt.Errorf("%w: header is %d bytes, want %d",
 			ErrInvalidFooter, len(buf), ReservedHeaderBytes)
 	}
-	if !bytes.Equal(buf[0:4], segmentMagic) {
+	if !bytes.Equal(buf[0:4], SegmentMagic) {
 		return Header{}, fmt.Errorf("%w: bad magic %q",
 			ErrCorruptSegment, buf[0:4])
 	}
@@ -84,9 +105,9 @@ func decodeHeader(buf []byte) (Header, error) {
 		return Header{}, fmt.Errorf("%w: checksum field at offset 4 is zero", ErrActiveSegment)
 	}
 	version := le.Uint16(buf[12:14])
-	if version != currentHeaderVersion {
+	if version != CurrentHeaderVersion {
 		return Header{}, fmt.Errorf("%w: header version %d, want %d",
-			ErrInvalidFooter, version, currentHeaderVersion)
+			ErrInvalidFooter, version, CurrentHeaderVersion)
 	}
 	h := Header{
 		Version:               version,
@@ -118,10 +139,10 @@ func ReadSealedHeader(r io.ReaderAt) (Header, error) {
 	if _, err := r.ReadAt(buf, 0); err != nil {
 		return Header{}, fmt.Errorf("segment: read header: %w", err)
 	}
-	return decodeHeader(buf)
+	return DecodeHeader(buf)
 }
 
-// xxh3HeaderFooter computes xxh3 over headerBytes[12:] followed by
+// XXH3HeaderFooter computes xxh3 over headerBytes[12:] followed by
 // footerBytes — i.e. version through end-of-footer per docs/README.md
 // §3.1.2. The magic and the checksum field itself are excluded so a
 // reader can verify the file's integrity without first knowing the
@@ -130,7 +151,7 @@ func ReadSealedHeader(r io.ReaderAt) (Header, error) {
 // Callers pass headerBytes with the checksum field zeroed; the
 // computed value is what they store back into bytes 4..11 of the
 // finalized header.
-func xxh3HeaderFooter(headerBytes, footerBytes []byte) uint64 {
+func XXH3HeaderFooter(headerBytes, footerBytes []byte) uint64 {
 	h := xxh3.New()
 	_, _ = h.Write(headerBytes[12:])
 	_, _ = h.Write(footerBytes)

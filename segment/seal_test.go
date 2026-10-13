@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/bluesky-social/jetstream/segment/internal/format"
 	"github.com/stretchr/testify/require"
 )
 
@@ -118,7 +119,7 @@ func TestSealRoundtripSmallStream(t *testing.T) {
 	headerBytes := make([]byte, ReservedHeaderBytes)
 	_, err = f.ReadAt(headerBytes, 0)
 	require.NoError(t, err)
-	require.Equal(t, segmentMagic, headerBytes[0:4])
+	require.Equal(t, format.SegmentMagic, headerBytes[0:4])
 	require.NotZero(t, binary.LittleEndian.Uint64(headerBytes[4:12]))
 	require.EqualValues(t, 1,
 		binary.LittleEndian.Uint16(headerBytes[12:14]))

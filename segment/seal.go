@@ -8,6 +8,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/bluesky-social/jetstream/segment/internal/format"
 	"github.com/jcalabro/gloom"
 )
 
@@ -389,7 +390,7 @@ type blockCollection struct {
 // IndexBlock decodes frame, a block's zstd frame without its length
 // prefix, and indexes it.
 func IndexBlock(frame []byte) (*BlockIndex, error) {
-	events, uncompressedSize, err := decodeBlockCompressedSized(frame)
+	events, uncompressedSize, err := format.DecodeBlockCompressedSized(frame)
 	if err != nil {
 		return nil, err
 	}
@@ -523,8 +524,8 @@ func (b *SealBuilder) Finish() (header, footer []byte, h Header, err error) {
 	if err != nil {
 		return nil, nil, Header{}, err
 	}
-	header = encodeHeader(h)
-	h.Checksum = xxh3HeaderFooter(header, footer)
+	header = format.EncodeHeader(h)
+	h.Checksum = format.XXH3HeaderFooter(header, footer)
 	binary.LittleEndian.PutUint64(header[4:12], h.Checksum)
 	return header, footer, h, nil
 }
@@ -634,7 +635,7 @@ func (res *blockWalkResult) addIndex(ix *BlockIndex, off int64) error {
 // sizing from the walk itself.
 func buildFooter(walk blockWalkResult, footerOffset int64) ([]byte, Header, error) {
 	// 1. Block index.
-	blockIndexBytes := encodeBlockIndex(walk.infos)
+	blockIndexBytes := format.EncodeBlockIndex(walk.infos)
 
 	// 2. Segment-level DID bloom.
 	segmentBloom := gloom.New(uint64(len(walk.uniqueDIDs)), segmentBloomFPRate)
@@ -703,7 +704,7 @@ func buildFooter(walk blockWalkResult, footerOffset int64) ([]byte, Header, erro
 	footer = append(footer, collectionIndexBytes...)
 
 	header := Header{
-		Version:               currentHeaderVersion,
+		Version:               format.CurrentHeaderVersion,
 		BlockCount:            uint32(len(walk.infos)),
 		EventCount:            walk.totalEventCount,
 		UniqueDIDCount:        uint32(len(walk.uniqueDIDs)),

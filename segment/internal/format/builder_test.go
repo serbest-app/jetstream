@@ -1,4 +1,4 @@
-package segment
+package format
 
 import (
 	"strings"
@@ -10,7 +10,7 @@ import (
 func TestBlockBuilder(t *testing.T) {
 	t.Parallel()
 
-	for _, n := range []int{-1, maxBlockEventsLimit + 1} {
+	for _, n := range []int{-1, MaxBlockEventsLimit + 1} {
 		_, err := NewBlockBuilder(n)
 		require.ErrorIsf(t, err, ErrInvalidConfig, "max %d", n)
 	}
@@ -69,7 +69,7 @@ func TestBlockBuilder(t *testing.T) {
 	bounds.UncompressedSize = info.UncompressedSize
 	require.Equal(t, bounds, info)
 
-	got, uncompressed, err := decodeBlockCompressedSized(frame)
+	got, uncompressed, err := DecodeBlockCompressedSized(frame)
 	require.NoError(t, err)
 	require.EqualValues(t, uncompressed, info.UncompressedSize)
 	require.Len(t, got, len(events))

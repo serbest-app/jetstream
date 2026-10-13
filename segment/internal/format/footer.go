@@ -1,4 +1,4 @@
-package segment
+package format
 
 import (
 	"encoding/binary"
@@ -34,18 +34,18 @@ type BlockInfo struct {
 	MinWitnessedAt, MaxWitnessedAt int64
 }
 
-// blockIndexEntrySize is the wire-format size of one block index
+// BlockIndexEntrySize is the wire-format size of one block index
 // entry: 8 + 4 + 4 + 4 + 8 + 8 + 8 + 8 = 52 bytes.
-const blockIndexEntrySize = 52
+const BlockIndexEntrySize = 52
 
-// encodeBlockIndex serializes the given infos into a freshly-allocated
-// slice of length len(infos) * blockIndexEntrySize. Entries are
+// EncodeBlockIndex serializes the given infos into a freshly-allocated
+// slice of length len(infos) * BlockIndexEntrySize. Entries are
 // emitted in argument order (which is also the on-disk block order).
-func encodeBlockIndex(infos []BlockInfo) []byte {
-	buf := make([]byte, len(infos)*blockIndexEntrySize)
+func EncodeBlockIndex(infos []BlockInfo) []byte {
+	buf := make([]byte, len(infos)*BlockIndexEntrySize)
 	le := binary.LittleEndian
 	for i, info := range infos {
-		off := i * blockIndexEntrySize
+		off := i * BlockIndexEntrySize
 		le.PutUint64(buf[off+0:off+8], info.Offset)
 		le.PutUint32(buf[off+8:off+12], info.CompressedSize)
 		le.PutUint32(buf[off+12:off+16], info.UncompressedSize)
@@ -58,11 +58,11 @@ func encodeBlockIndex(infos []BlockInfo) []byte {
 	return buf
 }
 
-// decodeBlockIndex parses count entries out of buf. buf must be
-// exactly count * blockIndexEntrySize bytes; mismatch is reported
+// DecodeBlockIndex parses count entries out of buf. buf must be
+// exactly count * BlockIndexEntrySize bytes; mismatch is reported
 // as ErrInvalidBlockIndex.
-func decodeBlockIndex(buf []byte, count uint32) ([]BlockInfo, error) {
-	want := int(count) * blockIndexEntrySize
+func DecodeBlockIndex(buf []byte, count uint32) ([]BlockInfo, error) {
+	want := int(count) * BlockIndexEntrySize
 	if len(buf) != want {
 		return nil, fmt.Errorf("%w: have %d bytes, want %d (count=%d)",
 			ErrInvalidBlockIndex, len(buf), want, count)
@@ -73,7 +73,7 @@ func decodeBlockIndex(buf []byte, count uint32) ([]BlockInfo, error) {
 	infos := make([]BlockInfo, count)
 	le := binary.LittleEndian
 	for i := range infos {
-		off := i * blockIndexEntrySize
+		off := i * BlockIndexEntrySize
 		infos[i] = BlockInfo{
 			Offset:           le.Uint64(buf[off+0 : off+8]),
 			CompressedSize:   le.Uint32(buf[off+8 : off+12]),

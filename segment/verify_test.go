@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/bluesky-social/jetstream/segment/internal/format"
 	"github.com/jcalabro/gloom"
 	"github.com/stretchr/testify/require"
 )
@@ -160,7 +161,7 @@ func readFooterParts(t *testing.T, path string) footerParts {
 	headerBytes := make([]byte, ReservedHeaderBytes)
 	_, err = f.ReadAt(headerBytes, 0)
 	require.NoError(t, err)
-	h, err := decodeHeader(headerBytes)
+	h, err := format.DecodeHeader(headerBytes)
 	require.NoError(t, err)
 	info, err := f.Stat()
 	require.NoError(t, err)
@@ -195,8 +196,8 @@ func writeFooterParts(t *testing.T, path string, parts footerParts) {
 
 	h := parts.header
 	h.Checksum = 0
-	headerBytes := encodeHeader(h)
-	checksum := xxh3HeaderFooter(headerBytes, footer)
+	headerBytes := format.EncodeHeader(h)
+	checksum := format.XXH3HeaderFooter(headerBytes, footer)
 	h.Checksum = checksum
 	binary.LittleEndian.PutUint64(headerBytes[4:12], checksum)
 

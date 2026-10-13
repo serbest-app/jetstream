@@ -1,4 +1,4 @@
-package segment
+package format
 
 import (
 	"encoding/binary"
@@ -35,10 +35,10 @@ func TestEncodeBlockIndexRoundtrip(t *testing.T) {
 		},
 	}
 
-	buf := encodeBlockIndex(infos)
-	require.Len(t, buf, len(infos)*blockIndexEntrySize)
+	buf := EncodeBlockIndex(infos)
+	require.Len(t, buf, len(infos)*BlockIndexEntrySize)
 
-	got, err := decodeBlockIndex(buf, uint32(len(infos)))
+	got, err := DecodeBlockIndex(buf, uint32(len(infos)))
 	require.NoError(t, err)
 	require.Equal(t, infos, got)
 }
@@ -59,8 +59,8 @@ func TestEncodeBlockIndexEntryFieldOffsets(t *testing.T) {
 		MinWitnessedAt:   0x6162636465666768,
 		MaxWitnessedAt:   0x7172737475767778,
 	}
-	buf := encodeBlockIndex([]BlockInfo{info})
-	require.Len(t, buf, blockIndexEntrySize)
+	buf := EncodeBlockIndex([]BlockInfo{info})
+	require.Len(t, buf, BlockIndexEntrySize)
 
 	require.Equal(t, uint64(0x0102030405060708),
 		binary.LittleEndian.Uint64(buf[0:8]))
@@ -84,15 +84,15 @@ func TestDecodeBlockIndexRejectsLengthMismatch(t *testing.T) {
 	t.Parallel()
 
 	// One entry's worth of bytes, but caller asks for two.
-	buf := make([]byte, blockIndexEntrySize)
-	_, err := decodeBlockIndex(buf, 2)
+	buf := make([]byte, BlockIndexEntrySize)
+	_, err := DecodeBlockIndex(buf, 2)
 	require.True(t, errors.Is(err, ErrInvalidBlockIndex))
 }
 
 func TestDecodeBlockIndexZeroEntries(t *testing.T) {
 	t.Parallel()
 
-	got, err := decodeBlockIndex(nil, 0)
+	got, err := DecodeBlockIndex(nil, 0)
 	require.NoError(t, err)
 	require.Empty(t, got)
 }
@@ -116,8 +116,8 @@ func TestEncodeBlockIndexProperty(t *testing.T) {
 				MaxWitnessedAt:   int64(r.Uint64()),
 			}
 		}
-		buf := encodeBlockIndex(infos)
-		got, err := decodeBlockIndex(buf, uint32(n))
+		buf := EncodeBlockIndex(infos)
+		got, err := DecodeBlockIndex(buf, uint32(n))
 		require.NoError(t, err)
 		require.Equal(t, infos, got)
 	}

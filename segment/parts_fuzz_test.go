@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"testing"
+
+	"github.com/bluesky-social/jetstream/segment/internal/format"
 )
 
 // FuzzOpenReaderParts feeds OpenReaderParts a header and footer as they
@@ -63,7 +65,7 @@ func FuzzOpenReaderParts(f *testing.F) {
 		if fixChecksum && len(header) == ReservedHeaderBytes {
 			header = bytes.Clone(header)
 			clear(header[4:12])
-			binary.LittleEndian.PutUint64(header[4:12], xxh3HeaderFooter(header, footer))
+			binary.LittleEndian.PutUint64(header[4:12], format.XXH3HeaderFooter(header, footer))
 		}
 		_, _ = ReadSealedHeader(bytes.NewReader(header))
 		var r *Reader

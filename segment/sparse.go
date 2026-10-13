@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unsafe"
 
+	"github.com/bluesky-social/jetstream/segment/internal/format"
 	"github.com/jcalabro/gloom"
 )
 
@@ -291,7 +292,7 @@ func (s *sparseRewrite) run(footer []byte) (SparseResult, error) {
 	// are: they sit between the block index, which keeps its length, and
 	// the collection index.
 	blooms := footer[h.DIDBloomOffset-h.FooterOffset : h.CollectionIndexOffset-h.FooterOffset]
-	blockIndex := encodeBlockIndex(infos)
+	blockIndex := format.EncodeBlockIndex(infos)
 	newFooter := make([]byte, 0, len(blockIndex)+len(blooms)+len(collBytes))
 	newFooter = append(newFooter, blockIndex...)
 	newFooter = append(newFooter, blooms...)
@@ -306,8 +307,8 @@ func (s *sparseRewrite) run(footer []byte) (SparseResult, error) {
 	nh.BlockDIDBloomOffset = nh.DIDBloomOffset + (h.BlockDIDBloomOffset - h.DIDBloomOffset)
 	nh.CollectionIndexOffset = nh.BlockDIDBloomOffset + (h.CollectionIndexOffset - h.BlockDIDBloomOffset)
 	nh.Checksum = 0
-	headerBytes := encodeHeader(nh)
-	nh.Checksum = xxh3HeaderFooter(headerBytes, newFooter)
+	headerBytes := format.EncodeHeader(nh)
+	nh.Checksum = format.XXH3HeaderFooter(headerBytes, newFooter)
 	binary.LittleEndian.PutUint64(headerBytes[4:12], nh.Checksum)
 
 	return SparseResult{
@@ -426,7 +427,7 @@ func (s *sparseRewrite) decode(i int) (events []Event, frame []byte, uncompresse
 	s.decoded[i] = true
 	frame, err = s.r.readFrame(i)
 	if err == nil {
-		events, uncompressedSize, err = decodeBlockCompressedSized(frame)
+		events, uncompressedSize, err = format.DecodeBlockCompressedSized(frame)
 	}
 	if err == nil && uint64(len(events)) != uint64(b.EventCount) {
 		err = fmt.Errorf("%w: block holds %d rows, block index says %d", ErrCorruptSegment, len(events), b.EventCount)
@@ -477,10 +478,10 @@ func (s *sparseRewrite) dropBlock(i int) error {
 
 	c := &sparseBlock{eventCount: uint32(len(kept)), collections: map[string]struct{}{}}
 	if len(kept) == 0 {
-		c.frame = encodeEmptyBlockCompressed()
-		c.uncompressedSize = len(encodeEmptyBlock())
+		c.frame = format.EncodeEmptyBlockCompressed()
+		c.uncompressedSize = len(format.EncodeEmptyBlock())
 	} else {
-		c.frame, c.uncompressedSize, err = encodeBlockCompressedSized(kept)
+		c.frame, c.uncompressedSize, err = format.EncodeBlockCompressedSized(kept)
 		if err != nil {
 			return fmt.Errorf("segment: sparse rewrite %s encode block %d: %w", s.opts.Name, i, err)
 		}

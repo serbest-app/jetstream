@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+
+	"github.com/bluesky-social/jetstream/segment/internal/format"
 )
 
 // collectionIndex is the parsed form of the collection block index
@@ -79,7 +81,7 @@ func encodeCollectionIndex(idx collectionIndex) ([]byte, error) {
 		body = append(body, mask...)
 	}
 
-	bodyZstd := blockEncoder.EncodeAll(body, nil)
+	bodyZstd := format.BlockEncoder.EncodeAll(body, nil)
 
 	header := make([]byte, collectionIndexHeaderSize)
 	le.PutUint32(header[0:4], uint32(collectionCount))
@@ -116,10 +118,10 @@ func decodeCollectionIndex(buf []byte) (collectionIndex, error) {
 			"%w: block_count %d exceeds limit %d",
 			ErrInvalidFooter, blockCount, maxBlockCountLimit)
 	}
-	if uint64(uncompressedSize) > maxDecodedBlockBytes {
+	if uint64(uncompressedSize) > format.MaxDecodedBlockBytes {
 		return collectionIndex{}, fmt.Errorf(
 			"%w: uncompressed_size %d exceeds limit %d",
-			ErrInvalidFooter, uncompressedSize, maxDecodedBlockBytes)
+			ErrInvalidFooter, uncompressedSize, format.MaxDecodedBlockBytes)
 	}
 
 	wantBitmaskLen := (collectionCount + 7) / 8
@@ -129,7 +131,7 @@ func decodeCollectionIndex(buf []byte) (collectionIndex, error) {
 			ErrInvalidFooter, bitmaskLen, wantBitmaskLen, collectionCount)
 	}
 
-	body, err := blockDecoder.DecodeAll(buf[collectionIndexHeaderSize:], nil)
+	body, err := format.BlockDecoder.DecodeAll(buf[collectionIndexHeaderSize:], nil)
 	if err != nil {
 		return collectionIndex{}, fmt.Errorf("segment: collection index decompress: %w", err)
 	}

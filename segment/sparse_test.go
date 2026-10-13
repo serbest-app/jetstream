@@ -7,6 +7,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/bluesky-social/jetstream/segment/internal/format"
 	"github.com/stretchr/testify/require"
 )
 
@@ -243,7 +244,7 @@ func TestSparseRewriteMatchesRewrite(t *testing.T) {
 			for i := range plan.frames {
 				se, err := sr.DecodeBlock(i)
 				require.NoError(t, err)
-				de, _, err := decodeBlockCompressedSized(plan.frames[i])
+				de, _, err := format.DecodeBlockCompressedSized(plan.frames[i])
 				require.NoError(t, err)
 				require.Equal(t, de, se)
 			}

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/bluesky-social/jetstream/segment/internal/format"
 	"github.com/stretchr/testify/require"
 )
 
@@ -76,7 +77,7 @@ func TestReadBlockFrame_MatchesOnDiskAndDecodes(t *testing.T) {
 		require.Equal(t, want, frame, "block %d frame bytes", idx)
 
 		// Decodes to the same events as DecodeBlock.
-		gotEvents, _, err := decodeBlockCompressedSized(frame)
+		gotEvents, _, err := format.DecodeBlockCompressedSized(frame)
 		require.NoError(t, err)
 		wantEvents, err := r.DecodeBlock(idx)
 		require.NoError(t, err)
@@ -165,7 +166,7 @@ func TestReadBlockFrame_RejectsOverflowingBlockRange(t *testing.T) {
 	hdr, err := ReadSealedHeader(f)
 	require.NoError(t, err)
 
-	entry := make([]byte, blockIndexEntrySize)
+	entry := make([]byte, format.BlockIndexEntrySize)
 	binary.LittleEndian.PutUint64(entry[0:8], math.MaxUint64-4)
 	binary.LittleEndian.PutUint32(entry[8:12], 0)
 	_, err = f.WriteAt(entry, int64(hdr.BlockIndexOffset))
@@ -240,7 +241,7 @@ func TestReadBlockFrame_EmptyCompactedBlockDecodesToZeroEvents(t *testing.T) {
 	require.NoError(t, err)
 	frame, err := ReadBlockFrame(f, hdr, 0)
 	require.NoError(t, err)
-	events, _, err := decodeBlockCompressedSized(frame)
+	events, _, err := format.DecodeBlockCompressedSized(frame)
 	require.NoError(t, err)
 	require.Empty(t, events)
 }

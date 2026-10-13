@@ -1,4 +1,4 @@
-package segment
+package format
 
 import (
 	"bytes"
@@ -16,7 +16,7 @@ import (
 
 // newCappedDecoder builds a private zstd decoder with a custom
 // max-memory cap; used by tests that exercise the bomb-rejection
-// behavior without mutating the package-level blockDecoder.
+// behavior without mutating the package-level BlockDecoder.
 func newCappedDecoder(maxBytes uint64) (*zstd.Decoder, error) {
 	return zstd.NewReader(nil, zstd.WithDecoderMaxMemory(maxBytes))
 }
@@ -157,7 +157,7 @@ func TestEncodeBlockEmptyReturnsErrorAndDecodeAcceptsExplicitEmpty(t *testing.T)
 	_, err := encodeBlock(nil)
 	require.Error(t, err)
 
-	got, err := decodeBlock(encodeEmptyBlock())
+	got, err := decodeBlock(EncodeEmptyBlock())
 	require.NoError(t, err)
 	require.Empty(t, got)
 }
@@ -263,14 +263,14 @@ func TestDecodeBlockRejectsOutOfRangeKind(t *testing.T) {
 }
 
 // TestDecodeBlockRejectsAbsurdEventCount targets the
-// maxBlockEventsLimit guard. A header claiming more events than
+// MaxBlockEventsLimit guard. A header claiming more events than
 // the cap (and which would also overflow int on 32-bit builds)
 // must be rejected before we attempt allocation.
 func TestDecodeBlockRejectsAbsurdEventCount(t *testing.T) {
 	t.Parallel()
 
 	hostile := make([]byte, 4)
-	binary.LittleEndian.PutUint32(hostile, uint32(maxBlockEventsLimit+1))
+	binary.LittleEndian.PutUint32(hostile, uint32(MaxBlockEventsLimit+1))
 	_, err := decodeBlock(hostile)
 	require.ErrorIs(t, err, errTruncatedBlock)
 }
@@ -290,7 +290,7 @@ func TestEncodeBlockCompressedRoundtrip(t *testing.T) {
 	// The frame is a real zstd frame, not the raw body.
 	require.NotEqual(t, mustEncode(t, events), frame)
 
-	got, err := decodeBlockCompressed(frame)
+	got, err := DecodeBlockCompressed(frame)
 	require.NoError(t, err)
 	require.Equal(t, events, got)
 }
@@ -298,12 +298,12 @@ func TestEncodeBlockCompressedRoundtrip(t *testing.T) {
 func TestDecodeBlockCompressedRejectsGarbage(t *testing.T) {
 	t.Parallel()
 
-	_, err := decodeBlockCompressed([]byte("not a zstd frame"))
+	_, err := DecodeBlockCompressed([]byte("not a zstd frame"))
 	require.Error(t, err)
 }
 
 // TestDecodeBlockCompressedRejectsZstdBomb pins the
-// WithDecoderMaxMemory guard wired into blockDecoder. A frame whose
+// WithDecoderMaxMemory guard wired into BlockDecoder. A frame whose
 // decompressed body exceeds the configured cap must error rather
 // than allocate gigabytes; the per-block decoder's default of 64 GiB
 // is unsafe for hostile input.
@@ -323,7 +323,7 @@ func TestDecodeBlockCompressedRejectsZstdBomb(t *testing.T) {
 	defer dec.Close()
 
 	bigBody := bytes.Repeat([]byte{0xAB}, 4096)
-	frame := blockEncoder.EncodeAll(bigBody, nil)
+	frame := BlockEncoder.EncodeAll(bigBody, nil)
 
 	_, err = dec.DecodeAll(frame, nil)
 	require.Error(t, err, "decoder must reject decompressed sizes above cap")
@@ -435,7 +435,7 @@ func TestEncodeBlockRoundtripProperty(t *testing.T) {
 			t.Logf("encode failed: %v", err)
 			return false
 		}
-		decoded, err := decodeBlockCompressed(encoded)
+		decoded, err := DecodeBlockCompressed(encoded)
 		if err != nil {
 			t.Logf("decode failed: %v", err)
 			return false
@@ -489,7 +489,7 @@ func TestDecodeBlockCompressedSizedReturnsBodyLen(t *testing.T) {
 	frame, err := encodeBlockCompressed(events)
 	require.NoError(t, err)
 
-	gotEvents, gotSize, err := decodeBlockCompressedSized(frame)
+	gotEvents, gotSize, err := DecodeBlockCompressedSized(frame)
 	require.NoError(t, err)
 	require.Len(t, gotEvents, len(events))
 

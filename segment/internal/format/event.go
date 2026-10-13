@@ -1,4 +1,4 @@
-package segment
+package format
 
 // Kind discriminates which firehose event type a row represents.
 // Values are the on-disk wire format from docs/README.md §3.2.

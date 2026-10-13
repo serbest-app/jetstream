@@ -6,6 +6,7 @@ import (
 	"math"
 	"sync/atomic"
 
+	"github.com/bluesky-social/jetstream/segment/internal/format"
 	"github.com/cockroachdb/pebble/vfs"
 	"github.com/jcalabro/gloom"
 )
@@ -164,7 +165,7 @@ func OpenReaderParts(header, footer []byte, fetch BlockFetcher, opts ReaderOptio
 	if fetch == nil {
 		return nil, fmt.Errorf("%w: OpenReaderParts fetch is nil", ErrInvalidConfig)
 	}
-	h, err := decodeHeader(header)
+	h, err := format.DecodeHeader(header)
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +217,7 @@ func openReaderAt(src io.ReaderAt, fileSize int64, opts ReaderOptions) (*Reader,
 	if _, err := src.ReadAt(headerBytes, 0); err != nil {
 		return nil, fmt.Errorf("segment: read header: %w", err)
 	}
-	header, err := decodeHeader(headerBytes)
+	header, err := format.DecodeHeader(headerBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -229,14 +230,14 @@ func openReaderAt(src io.ReaderAt, fileSize int64, opts ReaderOptions) (*Reader,
 	}
 
 	// 2. Block index.
-	blockIndexLen := int64(header.BlockCount) * blockIndexEntrySize
+	blockIndexLen := int64(header.BlockCount) * format.BlockIndexEntrySize
 	blockIndexBytes := make([]byte, blockIndexLen)
 	if blockIndexLen > 0 {
 		if _, err := src.ReadAt(blockIndexBytes, int64(header.BlockIndexOffset)); err != nil {
 			return nil, fmt.Errorf("segment: read block index: %w", err)
 		}
 	}
-	blocks, err := decodeBlockIndex(blockIndexBytes, header.BlockCount)
+	blocks, err := format.DecodeBlockIndex(blockIndexBytes, header.BlockCount)
 	if err != nil {
 		return nil, err
 	}
@@ -303,7 +304,7 @@ func openReaderAt(src io.ReaderAt, fileSize int64, opts ReaderOptions) (*Reader,
 		for i := 4; i < 12; i++ {
 			headerForHash[i] = 0
 		}
-		got := xxh3HeaderFooter(headerForHash, footerBytes)
+		got := format.XXH3HeaderFooter(headerForHash, footerBytes)
 		if got != header.Checksum {
 			return nil, fmt.Errorf("%w: computed=%x, header=%x",
 				ErrChecksumMismatch, got, header.Checksum)
@@ -422,7 +423,7 @@ func (r *Reader) DecodeBlock(idx int) ([]Event, error) {
 	if err != nil {
 		return nil, fmt.Errorf("segment: read block %d frame: %w", idx, err)
 	}
-	events, _, err := decodeBlockCompressedSized(frame)
+	events, _, err := format.DecodeBlockCompressedSized(frame)
 	if err != nil {
 		return nil, fmt.Errorf("segment: decode block %d: %w", idx, err)
 	}

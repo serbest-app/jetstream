@@ -1,13 +1,17 @@
 package segment
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/bluesky-social/jetstream/segment/internal/format"
+)
 
 // FuzzReadHeader ensures decodeHeader never panics or reads past the
 // input regardless of how malformed the input is. It returns either
 // a valid Header or a sentinel-wrapped error.
 func FuzzReadHeader(f *testing.F) {
 	// Seed with a few well-formed and obviously malformed inputs.
-	good := encodeHeader(Header{
+	good := format.EncodeHeader(Header{
 		Version:  1,
 		Checksum: 0xDEADBEEF,
 	})
@@ -17,7 +21,7 @@ func FuzzReadHeader(f *testing.F) {
 	f.Add([]byte("jss0"))
 
 	f.Fuzz(func(t *testing.T, data []byte) {
-		_, _ = decodeHeader(data)
+		_, _ = format.DecodeHeader(data)
 	})
 }
 
@@ -26,7 +30,7 @@ func FuzzReadHeader(f *testing.F) {
 // or an error.
 func FuzzReadBlockIndex(f *testing.F) {
 	f.Add([]byte{}, uint32(0))
-	good := encodeBlockIndex([]BlockInfo{{Offset: 256, CompressedSize: 1, EventCount: 1}})
+	good := format.EncodeBlockIndex([]BlockInfo{{Offset: 256, CompressedSize: 1, EventCount: 1}})
 	f.Add(good, uint32(1))
 
 	f.Fuzz(func(t *testing.T, data []byte, count uint32) {
@@ -35,7 +39,7 @@ func FuzzReadBlockIndex(f *testing.F) {
 		if count > 1<<16 {
 			t.Skip()
 		}
-		_, _ = decodeBlockIndex(data, count)
+		_, _ = format.DecodeBlockIndex(data, count)
 	})
 }
 

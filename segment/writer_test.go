@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/bluesky-social/jetstream/segment/internal/format"
 	"github.com/cockroachdb/pebble/vfs"
 	"github.com/stretchr/testify/require"
 )
@@ -184,10 +185,10 @@ func TestNewCreatesEmpty256ByteFile(t *testing.T) {
 	require.NoError(t, err)
 
 	// Layout: segmentMagic + zero padding to ReservedHeaderBytes.
-	require.Equal(t, segmentMagic, contents[:len(segmentMagic)],
-		"first %d bytes must be segmentMagic", len(segmentMagic))
-	for i, b := range contents[len(segmentMagic):] {
-		require.Zerof(t, b, "padding byte %d should be zero", i+len(segmentMagic))
+	require.Equal(t, format.SegmentMagic, contents[:len(format.SegmentMagic)],
+		"first %d bytes must be format.SegmentMagic", len(format.SegmentMagic))
+	for i, b := range contents[len(format.SegmentMagic):] {
+		require.Zerof(t, b, "padding byte %d should be zero", i+len(format.SegmentMagic))
 	}
 }
 
@@ -310,7 +311,7 @@ func TestNewRejectsSealedFile(t *testing.T) {
 	path := filepath.Join(dir, "seg.jss")
 
 	header := make([]byte, ReservedHeaderBytes)
-	copy(header, segmentMagic)
+	copy(header, format.SegmentMagic)
 	// Any non-zero value at offset 4..11 trips the detection.
 	binary.LittleEndian.PutUint64(header[4:12], 0xCAFEBABE)
 	require.NoError(t, os.WriteFile(path, header, 0o644))
@@ -338,7 +339,7 @@ func TestNewRejectsMaxEventsPerBlockAboveDecoderCap(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "seg.jss")
 
-	_, err := New(Config{Path: path, MaxEventsPerBlock: maxBlockEventsLimit + 1})
+	_, err := New(Config{Path: path, MaxEventsPerBlock: format.MaxBlockEventsLimit + 1})
 	require.True(t, errors.Is(err, ErrInvalidConfig),
 		"writer cap above decoder cap must be rejected")
 }
@@ -484,7 +485,7 @@ func TestFlushWritesFramedBlockAndFsyncs(t *testing.T) {
 	require.EqualValues(t, len(body)-8, frameLen, "frame length must match remaining bytes")
 
 	frame := body[8:]
-	decoded, err := decodeBlockCompressed(frame)
+	decoded, err := format.DecodeBlockCompressed(frame)
 	require.NoError(t, err)
 	require.Equal(t, len(events), len(decoded))
 	for i := range events {
@@ -729,7 +730,7 @@ func walkFramedBlocks(t *testing.T, body []byte) [][]Event {
 		require.LessOrEqual(t, frameLen, uint64(len(body)), "frame length overruns body")
 		frame := body[:frameLen]
 		body = body[frameLen:]
-		evs, err := decodeBlockCompressed(frame)
+		evs, err := format.DecodeBlockCompressed(frame)
 		require.NoError(t, err)
 		out = append(out, evs)
 	}

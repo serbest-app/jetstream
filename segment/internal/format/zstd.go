@@ -1,4 +1,4 @@
-package segment
+package format
 
 import (
 	"fmt"
@@ -8,11 +8,11 @@ import (
 )
 
 var (
-	blockEncoder *zstd.Encoder
-	blockDecoder *zstd.Decoder
+	BlockEncoder *zstd.Encoder
+	BlockDecoder *zstd.Decoder
 )
 
-// maxDecodedBlockBytes caps the uncompressed size of any single
+// MaxDecodedBlockBytes caps the uncompressed size of any single
 // block frame handed to the zstd decoder. Without this, the
 // klauspost/compress default of 64 GiB lets a hostile or corrupt
 // frame decompress to gigabytes before any of decodeBlock's careful
@@ -20,7 +20,7 @@ var (
 // generous: a legitimate block is bounded above by the segment
 // file's ~256 MB target (docs/README.md §3.1.1), so 1 GiB leaves headroom
 // for the segment-size knob without giving an attacker a runway.
-const maxDecodedBlockBytes uint64 = 1 << 30 // 1 GiB
+const MaxDecodedBlockBytes uint64 = 1 << 30 // 1 GiB
 
 // maxBlockEncoders caps the block encoder pool; see init.
 const maxBlockEncoders = 4
@@ -35,7 +35,7 @@ func init() {
 	// encode blocks at once (hot and direct batch prepare, the maintainer,
 	// seal and compaction), and one encoder at SpeedDefault handles hundreds
 	// of MB/s, far above ingest, so extra callers briefly queue instead.
-	blockEncoder, err = zstd.NewWriter(
+	BlockEncoder, err = zstd.NewWriter(
 		nil,
 		zstd.WithEncoderLevel(zstd.SpeedDefault),
 		zstd.WithEncoderCRC(true),
@@ -53,8 +53,8 @@ func init() {
 	// pipeline actually scale; each pooled blockDec is cheap and idle ones cost
 	// nothing, and the server's seal/scan callers only benefit from the extra
 	// capacity. (DecodeAll is already safe for concurrent use across goroutines.)
-	blockDecoder, err = zstd.NewReader(nil,
-		zstd.WithDecoderMaxMemory(maxDecodedBlockBytes),
+	BlockDecoder, err = zstd.NewReader(nil,
+		zstd.WithDecoderMaxMemory(MaxDecodedBlockBytes),
 		zstd.WithDecoderConcurrency(runtime.GOMAXPROCS(0)),
 	)
 	if err != nil {
@@ -65,24 +65,24 @@ func init() {
 // encodeBlockCompressed encodes events with encodeBlock, then wraps
 // the result in a single zstd frame with content checksums enabled.
 func encodeBlockCompressed(events []Event) ([]byte, error) {
-	frame, _, err := encodeBlockCompressedSized(events)
+	frame, _, err := EncodeBlockCompressedSized(events)
 	return frame, err
 }
 
-// encodeBlockCompressedSized is encodeBlockCompressed returning the
+// EncodeBlockCompressedSized is encodeBlockCompressed returning the
 // uncompressed body length alongside the frame, so callers that need
 // both (the rewrite path's block-index entries) encode exactly once.
-func encodeBlockCompressedSized(events []Event) ([]byte, int, error) {
+func EncodeBlockCompressedSized(events []Event) ([]byte, int, error) {
 	body, err := encodeBlock(events)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	return blockEncoder.EncodeAll(body, nil), len(body), nil
+	return BlockEncoder.EncodeAll(body, nil), len(body), nil
 }
 
-func encodeEmptyBlockCompressed() []byte {
-	return blockEncoder.EncodeAll(encodeEmptyBlock(), nil)
+func EncodeEmptyBlockCompressed() []byte {
+	return BlockEncoder.EncodeAll(EncodeEmptyBlock(), nil)
 }
 
 // WarmEncoder initializes the global zstd encoder's lazy worker channel
@@ -94,17 +94,17 @@ func encodeEmptyBlockCompressed() []byte {
 // idempotent. The decoder needs no warmup because NewReader creates its
 // channel at package initialization.
 func WarmEncoder() {
-	_ = encodeEmptyBlockCompressed()
+	_ = EncodeEmptyBlockCompressed()
 }
 
-// decodeBlockCompressed is the inverse: decompress, then decodeBlock.
+// DecodeBlockCompressed is the inverse: decompress, then decodeBlock.
 //
 // We pass a fresh `nil` dst to DecodeAll so body is a private
 // allocation; that satisfies decodeBlock's buffer-aliasing contract
 // (the returned events alias body for their string columns and we
 // never mutate body afterwards).
-func decodeBlockCompressed(frame []byte) ([]Event, error) {
-	body, err := blockDecoder.DecodeAll(frame, nil)
+func DecodeBlockCompressed(frame []byte) ([]Event, error) {
+	body, err := BlockDecoder.DecodeAll(frame, nil)
 	if err != nil {
 		return nil, fmt.Errorf("segment: zstd decompress: %w", err)
 	}
@@ -112,7 +112,7 @@ func decodeBlockCompressed(frame []byte) ([]Event, error) {
 	return decodeBlock(body)
 }
 
-// decodeBlockCompressedSized is like decodeBlockCompressed but also
+// DecodeBlockCompressedSized is like DecodeBlockCompressed but also
 // returns the decompressed body length. Seal needs the size to
 // populate BlockInfo.UncompressedSize for the block index without a
 // second decompress.
@@ -121,8 +121,8 @@ func decodeBlockCompressed(frame []byte) ([]Event, error) {
 // events alias the (private) decompressed body for their string and
 // payload columns. Callers that need to retain string fields beyond
 // the events' lifetime must clone.
-func decodeBlockCompressedSized(frame []byte) ([]Event, int, error) {
-	body, err := blockDecoder.DecodeAll(frame, nil)
+func DecodeBlockCompressedSized(frame []byte) ([]Event, int, error) {
+	body, err := BlockDecoder.DecodeAll(frame, nil)
 	if err != nil {
 		return nil, 0, fmt.Errorf("segment: zstd decompress: %w", err)
 	}

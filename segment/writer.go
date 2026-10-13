@@ -7,29 +7,9 @@ import (
 	"io"
 	"sort"
 
+	"github.com/bluesky-social/jetstream/segment/internal/format"
 	"github.com/cockroachdb/pebble/vfs"
 )
-
-const (
-	// The default number of events to store in a single segment block. This
-	// value is just the default, and is configurable by the user.
-	DefaultMaxEventsPerBlock = 4096
-
-	// ReservedHeaderBytes is the size of the fixed header at the start
-	// of every segment file (docs/README.md §3.1.2). The first len(segmentMagic)
-	// bytes are the magic; the remainder is zero-filled placeholder until
-	// Seal populates the finalized header. ReservedHeaderBytes is also
-	// the byte offset at which the framed-block region begins.
-	//
-	// Exported so callers that own the active-segment lifecycle (e.g.
-	// internal/ingest) can compute byte offsets without duplicating the
-	// constant.
-	ReservedHeaderBytes = 256
-)
-
-// segmentMagic is written at offset 0 of every segment file at
-// creation time; it identifies the file as a jetstream segment.
-var segmentMagic = []byte("jss0")
 
 // Config controls writer behavior. Path is required.
 type Config struct {
@@ -63,9 +43,9 @@ func (c Config) validate() error {
 	}
 	// The decoder enforces maxBlockEventsLimit on read; refuse a writer
 	// that could produce blocks the same package cannot read back.
-	if c.MaxEventsPerBlock > maxBlockEventsLimit {
+	if c.MaxEventsPerBlock > format.MaxBlockEventsLimit {
 		return fmt.Errorf("%w: MaxEventsPerBlock %d exceeds decoder cap %d",
-			ErrInvalidConfig, c.MaxEventsPerBlock, maxBlockEventsLimit)
+			ErrInvalidConfig, c.MaxEventsPerBlock, format.MaxBlockEventsLimit)
 	}
 	return nil
 }
@@ -189,7 +169,7 @@ func New(cfg Config) (*Writer, error) {
 	}
 
 	w := &Writer{cfg: cfg, file: f}
-	w.pending.init(cfg.MaxEventsPerBlock)
+	format.BuilderInit(&w.pending, cfg.MaxEventsPerBlock)
 
 	endInfo, err := f.Stat()
 	if err != nil {
@@ -218,7 +198,7 @@ func New(cfg Config) (*Writer, error) {
 // failure.
 func initializeNewSegment(f vfs.File, cfg Config) error {
 	header := make([]byte, ReservedHeaderBytes)
-	copy(header, segmentMagic)
+	copy(header, format.SegmentMagic)
 
 	if err := cfg.beforeIO(IOOpWrite); err != nil {
 		return fmt.Errorf("segment: write header: %w", err)
@@ -255,11 +235,11 @@ func resumeExistingSegment(fs vfs.FS, f vfs.File, size int64, path string) error
 			ErrCorruptSegment, path, size)
 	}
 
-	head := make([]byte, len(segmentMagic))
+	head := make([]byte, len(format.SegmentMagic))
 	if _, err := f.ReadAt(head, 0); err != nil {
 		return fmt.Errorf("segment: read magic: %w", err)
 	}
-	if !bytes.Equal(head, segmentMagic) {
+	if !bytes.Equal(head, format.SegmentMagic) {
 		return fmt.Errorf("%w: %s: bad magic %q", ErrCorruptSegment, path, head)
 	}
 
@@ -392,7 +372,7 @@ func (w *Writer) flushLocked() error {
 	// the second-buffer-plus-memcpy the previous design needed.
 	w.wireScratch = append(w.wireScratch[:0], 0, 0, 0, 0, 0, 0, 0, 0)
 	var info BlockInfo
-	w.wireScratch, info = w.pending.appendFrame(w.wireScratch)
+	w.wireScratch, info = format.BuilderAppendFrame(&w.pending, w.wireScratch)
 	binary.LittleEndian.PutUint64(w.wireScratch[:8], uint64(len(w.wireScratch)-8))
 
 	if err := w.cfg.beforeIO(IOOpWrite); err != nil {
@@ -410,7 +390,7 @@ func (w *Writer) flushLocked() error {
 
 	// Drop the pending buffer so a Sync failure cannot re-encode the
 	// same rows on a retry.
-	w.pending.reset()
+	format.BuilderReset(&w.pending)
 
 	if err := w.cfg.beforeIO(IOOpSync); err != nil {
 		w.stickyErr = fmt.Errorf("segment: fsync block: %w", err)
@@ -431,7 +411,7 @@ func (w *Writer) prepareFlushLocked(dst []byte) (*PreparedBlock, error) {
 		return nil, nil
 	}
 
-	body, info := w.pending.prepare(dst)
+	body, info := format.BuilderPrepare(&w.pending, dst)
 	prepared := &PreparedBlock{
 		Body:  body,
 		info:  info,
@@ -460,7 +440,7 @@ func CompressPreparedBlock(prepared *PreparedBlock) []byte {
 	if prepared == nil {
 		return nil
 	}
-	return blockEncoder.EncodeAll(prepared.Body, nil)
+	return format.BlockEncoder.EncodeAll(prepared.Body, nil)
 }
 
 // CommitPreparedFlush writes a previously prepared and compressed block frame
@@ -533,7 +513,7 @@ func (w *Writer) Append(ev Event) (full bool, err error) {
 	if w.stickyErr != nil {
 		return false, w.stickyErr
 	}
-	return w.pending.appendEvent(&ev)
+	return format.BuilderAppendEvent(&w.pending, &ev)
 }
 
 // Pending returns the number of events buffered but not yet flushed.

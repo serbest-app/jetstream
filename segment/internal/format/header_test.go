@@ -1,4 +1,4 @@
-package segment
+package format
 
 import (
 	"bytes"
@@ -29,10 +29,10 @@ func TestEncodeHeaderRoundtrip(t *testing.T) {
 		Checksum:              0xDEADBEEFCAFEBABE,
 	}
 
-	buf := encodeHeader(h)
+	buf := EncodeHeader(h)
 	require.Len(t, buf, ReservedHeaderBytes)
 
-	got, err := decodeHeader(buf)
+	got, err := DecodeHeader(buf)
 	require.NoError(t, err)
 	require.Equal(t, h, got)
 }
@@ -60,7 +60,7 @@ func TestEncodeHeaderFieldOffsets(t *testing.T) {
 		BlockIndexOffset:      9, // matches FooterOffset
 		Checksum:              0xAABBCCDDEEFF0011,
 	}
-	buf := encodeHeader(h)
+	buf := EncodeHeader(h)
 
 	require.Equal(t, []byte("jss0"), buf[0:4], "magic at offset 0")
 	require.Equal(t, uint64(0xAABBCCDDEEFF0011),
@@ -102,7 +102,7 @@ func TestEncodeHeaderFieldOffsets(t *testing.T) {
 func TestDecodeHeaderRejectsShort(t *testing.T) {
 	t.Parallel()
 
-	_, err := decodeHeader(make([]byte, ReservedHeaderBytes-1))
+	_, err := DecodeHeader(make([]byte, ReservedHeaderBytes-1))
 	require.True(t, errors.Is(err, ErrInvalidFooter))
 }
 
@@ -111,7 +111,7 @@ func TestDecodeHeaderRejectsBadMagic(t *testing.T) {
 
 	buf := make([]byte, ReservedHeaderBytes)
 	copy(buf, []byte("XXXX"))
-	_, err := decodeHeader(buf)
+	_, err := DecodeHeader(buf)
 	require.True(t, errors.Is(err, ErrCorruptSegment))
 }
 
@@ -119,12 +119,12 @@ func TestDecodeHeaderRejectsZeroChecksum(t *testing.T) {
 	t.Parallel()
 
 	// Zero checksum at offset 4 means "active file" by our active/sealed
-	// convention. decodeHeader is only ever called on what should be a
+	// convention. DecodeHeader is only ever called on what should be a
 	// sealed file, so a zero checksum is an unambiguous error.
 	buf := make([]byte, ReservedHeaderBytes)
-	copy(buf, segmentMagic)
+	copy(buf, SegmentMagic)
 	binary.LittleEndian.PutUint16(buf[12:14], 1) // version
-	_, err := decodeHeader(buf)
+	_, err := DecodeHeader(buf)
 	require.True(t, errors.Is(err, ErrActiveSegment))
 }
 
@@ -136,7 +136,7 @@ func TestDecodeHeader_ActiveSegmentSentinel(t *testing.T) {
 	copy(buf[0:4], []byte("jss0"))
 	// Bytes 4..11 (checksum) deliberately left zero.
 
-	_, err := decodeHeader(buf)
+	_, err := DecodeHeader(buf)
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrActiveSegment)
 	require.NotErrorIs(t, err, ErrCorruptSegment,
@@ -147,10 +147,10 @@ func TestDecodeHeaderRejectsBadVersion(t *testing.T) {
 	t.Parallel()
 
 	buf := make([]byte, ReservedHeaderBytes)
-	copy(buf, segmentMagic)
+	copy(buf, SegmentMagic)
 	binary.LittleEndian.PutUint64(buf[4:12], 0xCAFE) // non-zero checksum
 	binary.LittleEndian.PutUint16(buf[12:14], 99)    // future version
-	_, err := decodeHeader(buf)
+	_, err := DecodeHeader(buf)
 	require.True(t, errors.Is(err, ErrInvalidFooter))
 }
 
@@ -159,12 +159,12 @@ func TestXxh3HeaderFooter(t *testing.T) {
 
 	headerBytes := bytes.Repeat([]byte{0xAB}, ReservedHeaderBytes)
 	footerBytes := []byte("hello, footer")
-	got := xxh3HeaderFooter(headerBytes, footerBytes)
+	got := XXH3HeaderFooter(headerBytes, footerBytes)
 	require.NotZero(t, got)
 
 	// Streaming computes the same value as feeding both regions in
 	// one go. Idempotent regression in case we ever switch the
 	// streaming model.
-	again := xxh3HeaderFooter(headerBytes, footerBytes)
+	again := XXH3HeaderFooter(headerBytes, footerBytes)
 	require.Equal(t, got, again)
 }

@@ -1,4 +1,4 @@
-package segment
+package format
 
 import (
 	"flag"

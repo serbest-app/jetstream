@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/bluesky-social/jetstream/segment/internal/format"
 	"github.com/stretchr/testify/require"
 )
 
@@ -464,7 +465,7 @@ func TestReaderOpenRejectsOverlappingBlockIndex(t *testing.T) {
 	headerBytes := make([]byte, ReservedHeaderBytes)
 	_, err = f.ReadAt(headerBytes, 0)
 	require.NoError(t, err)
-	hdr, err := decodeHeader(headerBytes)
+	hdr, err := format.DecodeHeader(headerBytes)
 	require.NoError(t, err)
 
 	// Patch the SECOND block-index entry's offset to point inside the
@@ -472,7 +473,7 @@ func TestReaderOpenRejectsOverlappingBlockIndex(t *testing.T) {
 	// we step over the first entry by adding blockIndexEntrySize.
 	var bad [8]byte
 	binary.LittleEndian.PutUint64(bad[:], uint64(ReservedHeaderBytes))
-	secondOffsetField := int64(hdr.BlockIndexOffset) + int64(blockIndexEntrySize)
+	secondOffsetField := int64(hdr.BlockIndexOffset) + int64(format.BlockIndexEntrySize)
 	_, err = f.WriteAt(bad[:], secondOffsetField)
 	require.NoError(t, err)
 	require.NoError(t, f.Sync())
@@ -660,7 +661,7 @@ func TestReaderOpenRejectsInvertedWitnessedAtBounds(t *testing.T) {
 	headerBytes := make([]byte, ReservedHeaderBytes)
 	_, err = f.ReadAt(headerBytes, 0)
 	require.NoError(t, err)
-	hdr, err := decodeHeader(headerBytes)
+	hdr, err := format.DecodeHeader(headerBytes)
 	require.NoError(t, err)
 
 	// First entry's min is currently 100, max is 200. Patch max to 50.

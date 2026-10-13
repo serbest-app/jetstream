@@ -8,6 +8,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+
+	"github.com/bluesky-social/jetstream/segment/internal/format"
 )
 
 // Inspection is the unified active+sealed view of a segment file
@@ -105,9 +107,9 @@ func Inspect(path string) (*Inspection, error) {
 	if _, err := f.ReadAt(headerBytes, 0); err != nil {
 		return nil, fmt.Errorf("segment: read header: %w", err)
 	}
-	if string(headerBytes[0:4]) != string(segmentMagic) {
+	if string(headerBytes[0:4]) != string(format.SegmentMagic) {
 		return nil, fmt.Errorf("%w: bad magic %q (want %q)",
-			ErrCorruptSegment, headerBytes[0:4], segmentMagic)
+			ErrCorruptSegment, headerBytes[0:4], format.SegmentMagic)
 	}
 
 	checksum := binary.LittleEndian.Uint64(headerBytes[4:12])
@@ -118,7 +120,7 @@ func Inspect(path string) (*Inspection, error) {
 }
 
 func inspectSealed(path string, fileSize int64, headerBytes []byte) (*Inspection, error) {
-	header, err := decodeHeader(headerBytes)
+	header, err := format.DecodeHeader(headerBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +207,7 @@ func verifySealedChecksum(path string, fileSize int64, headerBytes []byte, heade
 	for i := 4; i < 12; i++ {
 		headerForHash[i] = 0
 	}
-	got := xxh3HeaderFooter(headerForHash, footerBytes)
+	got := format.XXH3HeaderFooter(headerForHash, footerBytes)
 	return got == header.Checksum, nil
 }
 

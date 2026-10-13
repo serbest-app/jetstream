@@ -93,12 +93,12 @@ jobs:
           - { package: "./internal/subscribe", target: FuzzResolveCursor }
           - { package: "./internal/xrpcapi", target: FuzzValidatePlanCollections }
           - { package: "./segment", target: FuzzBuildSealed }
-          - { package: "./segment", target: FuzzDecodeBlock }
-          - { package: "./segment", target: FuzzDecodeBlockFromCompressed }
           - { package: "./segment", target: FuzzOpenReaderParts }
           - { package: "./segment", target: FuzzReadBlockIndex }
           - { package: "./segment", target: FuzzReadCollectionIndex }
           - { package: "./segment", target: FuzzReadHeader }
+          - { package: "./segment/internal/format", target: FuzzDecodeBlock }
+          - { package: "./segment/internal/format", target: FuzzDecodeBlockFromCompressed }
           - { package: "./segment", target: FuzzRewrite }
           - { package: "./segment", target: FuzzSparseRewrite }
     steps:

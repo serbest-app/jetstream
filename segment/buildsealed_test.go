@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/bluesky-social/jetstream/segment/internal/format"
 	"github.com/stretchr/testify/require"
 )
 
@@ -17,7 +18,7 @@ import (
 // frames (length prefixes stripped, in block order), and its footer.
 func sealedParts(t testing.TB, data []byte) (header []byte, frames [][]byte, footer []byte) {
 	t.Helper()
-	h, err := decodeHeader(data[:ReservedHeaderBytes])
+	h, err := format.DecodeHeader(data[:ReservedHeaderBytes])
 	require.NoError(t, err)
 	off := uint64(ReservedHeaderBytes)
 	for off < h.FooterOffset {
@@ -195,7 +196,7 @@ func TestBuildSealedEmptyBlockEndsIndex(t *testing.T) {
 	b := encodeFrames(t, []Event{
 		{Seq: 3, WitnessedAt: 30, Kind: KindCreate, DID: "did:plc:c", Collection: "d", Rkey: "r3"},
 	}, 2)
-	frames := [][]byte{a[0], encodeEmptyBlockCompressed(), b[0]}
+	frames := [][]byte{a[0], format.EncodeEmptyBlockCompressed(), b[0]}
 
 	header, footer, h, err := BuildSealed(SliceFrameSource(frames))
 	require.NoError(t, err)

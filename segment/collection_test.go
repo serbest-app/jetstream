@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/bluesky-social/jetstream/segment/internal/format"
 	"github.com/stretchr/testify/require"
 )
 
@@ -129,7 +130,7 @@ func TestDecodecollectionIndexRejectsTruncatedEventCount(t *testing.T) {
 	// since the row read fails before bitmask iteration.
 	body := []byte{0x01}
 
-	bodyZstd := blockEncoder.EncodeAll(body, nil)
+	bodyZstd := format.BlockEncoder.EncodeAll(body, nil)
 	header := make([]byte, collectionIndexHeaderSize)
 	le := binary.LittleEndian
 	le.PutUint32(header[0:4], 1)  // collection_count

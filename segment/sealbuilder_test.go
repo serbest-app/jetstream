@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/bluesky-social/jetstream/segment/internal/format"
 	"github.com/stretchr/testify/require"
 )
 
@@ -116,7 +117,7 @@ func TestSealBuilderIndexedEmptyBlockEndsIndex(t *testing.T) {
 	t.Parallel()
 	rng := rand.New(rand.NewPCG(3, 3))
 	frames := encodeFrames(t, sealBuilderEvents(rng, 40), 8)
-	frames = append(frames[:2:2], append([][]byte{encodeEmptyBlockCompressed()}, frames[2:]...)...)
+	frames = append(frames[:2:2], append([][]byte{format.EncodeEmptyBlockCompressed()}, frames[2:]...)...)
 	wantHeader, wantFooter, wantH, err := BuildSealed(SliceFrameSource(frames))
 	require.NoError(t, err)
 	require.EqualValues(t, 2, wantH.BlockCount)

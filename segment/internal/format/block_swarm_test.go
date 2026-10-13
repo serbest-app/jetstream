@@ -1,4 +1,4 @@
-package segment
+package format
 
 import (
 	"math/rand"
@@ -77,7 +77,7 @@ func TestSwarm(t *testing.T) {
 		encoded, err := encodeBlockCompressed(events)
 		require.NoErrorf(t, err, "iter=%d seed=%d flags=%v encode", iter, seed, flags)
 
-		decoded, err := decodeBlockCompressed(encoded)
+		decoded, err := DecodeBlockCompressed(encoded)
 		require.NoErrorf(t, err, "iter=%d seed=%d flags=%v decode", iter, seed, flags)
 
 		require.Equalf(t, len(events), len(decoded),

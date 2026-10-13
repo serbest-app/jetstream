@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/bluesky-social/jetstream/segment/internal/format"
 	"github.com/cockroachdb/pebble/vfs"
 )
 
@@ -68,7 +69,7 @@ func ScanMaxSeqFS(fs vfs.FS, path string) (maxSeq uint64, found bool, err error)
 			return 0, false, fmt.Errorf("segment: scan read frame body at %d: %w", off, err)
 		}
 
-		events, err := decodeBlockCompressed(frame)
+		events, err := format.DecodeBlockCompressed(frame)
 		if err != nil {
 			return 0, false, fmt.Errorf("segment: scan decode block at %d: %w", off, err)
 		}
@@ -124,7 +125,7 @@ func WalkActiveFS(fs vfs.FS, path string, fn func([]Event) error) error {
 		if _, err := f.ReadAt(frame, int64(b.Offset)+8); err != nil {
 			return fmt.Errorf("segment: read active block %d: %w", i, err)
 		}
-		events, _, err := decodeBlockCompressedSized(frame)
+		events, _, err := format.DecodeBlockCompressedSized(frame)
 		if err != nil {
 			return fmt.Errorf("segment: decode active block %d: %w", i, err)
 		}
@@ -177,7 +178,7 @@ func WalkActiveRangeFS(fs vfs.FS, path string, startOffset, endOffset uint64, fn
 		if err != nil {
 			return fmt.Errorf("segment: read active range block %d: %w", block, err)
 		}
-		events, _, err := decodeBlockCompressedSized(frame)
+		events, _, err := format.DecodeBlockCompressedSized(frame)
 		if err != nil {
 			return fmt.Errorf("segment: decode active range block %d: %w", block, err)
 		}
@@ -220,8 +221,8 @@ func ActiveBlocksFS(fs vfs.FS, path string) ([]BlockInfo, error) {
 	if _, err := f.ReadAt(head[:], 0); err != nil {
 		return nil, fmt.Errorf("segment: read header %s: %w", path, err)
 	}
-	if !bytes.Equal(head[:len(segmentMagic)], segmentMagic) {
-		return nil, fmt.Errorf("%w: %s: bad magic %q", ErrCorruptSegment, path, head[:len(segmentMagic)])
+	if !bytes.Equal(head[:len(format.SegmentMagic)], format.SegmentMagic) {
+		return nil, fmt.Errorf("%w: %s: bad magic %q", ErrCorruptSegment, path, head[:len(format.SegmentMagic)])
 	}
 	if binary.LittleEndian.Uint64(head[4:12]) != 0 {
 		return nil, fmt.Errorf("%w: %s", ErrSegmentSealed, path)

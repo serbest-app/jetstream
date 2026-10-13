@@ -11,14 +11,14 @@ import (
 	"time"
 
 	"github.com/bluesky-social/jetstream/api/jetstream"
-	"github.com/bluesky-social/jetstream/segment"
+	"github.com/bluesky-social/jetstream/segment/format"
 	"github.com/jcalabro/atmos/xrpc"
 )
 
 // rowSelector decides whether a decoded segment row should be emitted. It runs
 // before the expensive CBOR decode and may be called concurrently. nil keeps
 // every row.
-type rowSelector func(*segment.Event) bool
+type rowSelector func(*format.Event) bool
 
 // prefetchDepth is how many whole-segment files the prefetcher may fetch ahead
 // of the framer. It overlaps the next segment's network download with the
@@ -304,12 +304,12 @@ func (d *downloader) runFramer(ctx context.Context, entries []planEntry, jobs ch
 // and stops this entry. Returns false if the pipeline was cancelled.
 func (d *downloader) frameWholeSegment(entryIdx int, entry planEntry, raw []byte, dispatch func(entryIdx, blockIdx int, frame []byte, ferr error) bool) bool {
 	r := bytes.NewReader(raw)
-	hdr, err := segment.ReadSealedHeader(r)
+	hdr, err := format.ReadSealedHeader(r)
 	if err != nil {
 		return dispatch(entryIdx, 0, nil, fmt.Errorf("jetstream: parse segment header %q: %w", entry.SegmentName, err))
 	}
 	for idx := 0; idx < int(hdr.BlockCount); idx++ {
-		frame, err := segment.ReadBlockFrame(r, hdr, idx)
+		frame, err := format.ReadBlockFrame(r, hdr, idx)
 		if err != nil {
 			return dispatch(entryIdx, idx, nil, fmt.Errorf("jetstream: read block %d of %q: %w", idx, entry.SegmentName, err))
 		}
@@ -655,7 +655,7 @@ func reassemble(entries []planEntry, results <-chan decodeResult, sem chan struc
 // allocation per block, dropped to GC with the batch; it is never pooled/reused,
 // so a consumer still holding an earlier batch can never observe a mutation.
 func (d *downloader) decodeFrame(frame []byte, segName string, blockIdx int) ([]Event, error) {
-	rows, err := segment.DecodeBlockFrame(frame)
+	rows, err := format.DecodeBlockFrame(frame)
 	if err != nil {
 		return nil, fmt.Errorf("jetstream: decode block %d of %q: %w", blockIdx, segName, err)
 	}
@@ -669,7 +669,7 @@ func (d *downloader) decodeFrame(frame []byte, segName string, blockIdx int) ([]
 
 // decodeRows selects and decodes one block's rows, which alias the block's
 // decompressed buffer, into public Events.
-func (d *downloader) decodeRows(rows []segment.Event) ([]Event, error) {
+func (d *downloader) decodeRows(rows []format.Event) ([]Event, error) {
 	// The selector runs exactly once per row, compacting the survivors in place,
 	// before anything is copied out of the decompressed block.
 	if d.selector != nil {
@@ -718,9 +718,9 @@ func (d *downloader) decodeRows(rows []segment.Event) ([]Event, error) {
 
 // isCommitKind reports whether a segment row kind decodes to a KindCommit event
 // (and therefore consumes a Commit slab slot in decodeFrame).
-func isCommitKind(k segment.Kind) bool {
+func isCommitKind(k format.Kind) bool {
 	switch k {
-	case segment.KindCreate, segment.KindUpdate, segment.KindDelete, segment.KindCreateResync:
+	case format.KindCreate, format.KindUpdate, format.KindDelete, format.KindCreateResync:
 		return true
 	default:
 		return false

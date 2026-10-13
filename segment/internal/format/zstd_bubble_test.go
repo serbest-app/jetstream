@@ -1,4 +1,4 @@
-package segment
+package format
 
 import (
 	"testing"
@@ -8,7 +8,7 @@ import (
 // TestWarmEncoderAllowsCrossBubbleEncode locks in the fix for the
 // "receive on synctest channel from outside bubble" fatal.
 //
-// The package-global blockEncoder builds its worker-pool channel lazily on the
+// The package-global BlockEncoder builds its worker-pool channel lazily on the
 // first EncodeAll. If that first encode happens inside a testing/synctest
 // bubble, the channel is bound to the bubble and a later EncodeAll from outside
 // aborts the whole process. WarmEncoder, called before the bubble, must
@@ -29,14 +29,14 @@ func TestWarmEncoderAllowsCrossBubbleEncode(t *testing.T) {
 	// non-durably-blocking (fine); without it, it would bind the global
 	// channel to the bubble.
 	synctest.Test(t, func(t *testing.T) {
-		if got := encodeEmptyBlockCompressed(); len(got) == 0 {
+		if got := EncodeEmptyBlockCompressed(); len(got) == 0 {
 			t.Fatal("in-bubble encode returned empty frame")
 		}
 	})
 
 	// Encode again from outside the bubble. Pre-fix this is the line that
 	// fatals the process ("receive on synctest channel from outside bubble").
-	if got := encodeEmptyBlockCompressed(); len(got) == 0 {
+	if got := EncodeEmptyBlockCompressed(); len(got) == 0 {
 		t.Fatal("post-bubble encode returned empty frame")
 	}
 }

@@ -1,4 +1,4 @@
-package segment
+package format
 
 import "testing"
 
@@ -41,6 +41,6 @@ func FuzzDecodeBlockFromCompressed(f *testing.F) {
 	f.Add([]byte{0x28, 0xB5, 0x2F, 0xFD}) // bare zstd magic, no body
 
 	f.Fuzz(func(t *testing.T, data []byte) {
-		_, _ = decodeBlockCompressed(data)
+		_, _ = DecodeBlockCompressed(data)
 	})
 }

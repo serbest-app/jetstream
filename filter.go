@@ -3,7 +3,7 @@ package jetstream
 import (
 	"strings"
 
-	"github.com/bluesky-social/jetstream/segment"
+	"github.com/bluesky-social/jetstream/segment/format"
 )
 
 // matcher applies exact kind, DID, collection, and seq filters after the
@@ -58,7 +58,7 @@ func newMatcher(req planRequest) *matcher {
 }
 
 // wantsSegment reports whether a stored row passes the exact filters.
-func (m *matcher) wantsSegment(ev *segment.Event) bool {
+func (m *matcher) wantsSegment(ev *format.Event) bool {
 	return m.wants(ev.Seq, ev.DID, publicKind(ev.Kind), ev.Collection)
 }
 
@@ -115,16 +115,16 @@ func (m *matcher) wants(seq uint64, did string, kind Kind, collection string) bo
 	return false
 }
 
-func publicKind(kind segment.Kind) Kind {
+func publicKind(kind format.Kind) Kind {
 	if kind.IsCommit() {
 		return KindCommit
 	}
 	switch kind {
-	case segment.KindIdentity:
+	case format.KindIdentity:
 		return KindIdentity
-	case segment.KindAccount:
+	case format.KindAccount:
 		return KindAccount
-	case segment.KindSync:
+	case format.KindSync:
 		return KindSync
 	default:
 		return ""

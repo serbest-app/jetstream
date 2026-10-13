@@ -1,4 +1,4 @@
-package segment
+package format
 
 import "fmt"
 
@@ -27,21 +27,21 @@ func NewBlockBuilder(maxEventsPerBlock int) (*BlockBuilder, error) {
 	if maxEventsPerBlock < 0 {
 		return nil, fmt.Errorf("%w: maxEventsPerBlock must be >= 0", ErrInvalidConfig)
 	}
-	if maxEventsPerBlock > maxBlockEventsLimit {
+	if maxEventsPerBlock > MaxBlockEventsLimit {
 		return nil, fmt.Errorf("%w: maxEventsPerBlock %d exceeds decoder cap %d",
-			ErrInvalidConfig, maxEventsPerBlock, maxBlockEventsLimit)
+			ErrInvalidConfig, maxEventsPerBlock, MaxBlockEventsLimit)
 	}
 	if maxEventsPerBlock == 0 {
 		maxEventsPerBlock = DefaultMaxEventsPerBlock
 	}
 	b := &BlockBuilder{}
-	b.init(maxEventsPerBlock)
+	BuilderInit(b, maxEventsPerBlock)
 	return b, nil
 }
 
-// init sizes an already-validated builder in place. Writer embeds its
+// BuilderInit sizes an already-validated builder in place. Writer embeds its
 // builder by value and calls this instead of NewBlockBuilder.
-func (b *BlockBuilder) init(maxEvents int) {
+func BuilderInit(b *BlockBuilder, maxEvents int) {
 	b.maxEvents = maxEvents
 	b.pending.preallocate(maxEvents)
 }
@@ -53,12 +53,12 @@ func (b *BlockBuilder) init(maxEvents int) {
 // block unchanged. An invalid event (see ValidateEvent) is rejected
 // without being buffered.
 func (b *BlockBuilder) Append(ev Event) (full bool, err error) {
-	return b.appendEvent(&ev)
+	return BuilderAppendEvent(b, &ev)
 }
 
-// appendEvent is Append by pointer, so Writer.Append does not copy the
+// BuilderAppendEvent is Append by pointer, so Writer.Append does not copy the
 // Event a second time on the hot path.
-func (b *BlockBuilder) appendEvent(ev *Event) (full bool, err error) {
+func BuilderAppendEvent(b *BlockBuilder, ev *Event) (full bool, err error) {
 	if b.pending.count() >= b.maxEvents {
 		return false, ErrBufferFull
 	}
@@ -188,43 +188,43 @@ func (b *BlockBuilder) Encode() (frame []byte, info BlockInfo) {
 	if b.pending.count() == 0 {
 		return nil, BlockInfo{}
 	}
-	frame, info = b.appendFrame(nil)
-	b.reset()
+	frame, info = BuilderAppendFrame(b, nil)
+	BuilderReset(b)
 	return frame, info
 }
 
-// appendFrame compresses the pending block and appends the zstd frame to
+// BuilderAppendFrame compresses the pending block and appends the zstd frame to
 // dst without resetting the builder, so Writer can lay the frame out
 // behind its own length prefix in a reused buffer and reset only once
 // the write lands. info.CompressedSize is the appended frame's length.
 // The caller must ensure Len() > 0.
-func (b *BlockBuilder) appendFrame(dst []byte) ([]byte, BlockInfo) {
+func BuilderAppendFrame(b *BlockBuilder, dst []byte) ([]byte, BlockInfo) {
 	// Reuse the scratch body across blocks. encodeBlockInto and
 	// zstd.EncodeAll both grow their dst slice as needed; we only need
 	// to reset length to zero between calls.
 	b.bodyScratch = encodeBlockInto(b.bodyScratch[:0], &b.pending)
 	start := len(dst)
-	dst = blockEncoder.EncodeAll(b.bodyScratch, dst)
+	dst = BlockEncoder.EncodeAll(b.bodyScratch, dst)
 	info := b.pendingInfo()
 	info.CompressedSize = uint32(len(dst) - start)
 	info.UncompressedSize = uint32(len(b.bodyScratch))
 	return dst, info
 }
 
-// prepare encodes the pending block's uncompressed body into dst and
-// resets the builder. Unlike appendFrame the body is not scratch: it
+// BuilderPrepare encodes the pending block's uncompressed body into dst and
+// resets the builder. Unlike BuilderAppendFrame the body is not scratch: it
 // escapes into a PreparedBlock that is compressed later, outside the
 // caller's critical section. The caller must ensure Len() > 0.
-func (b *BlockBuilder) prepare(dst []byte) ([]byte, BlockInfo) {
+func BuilderPrepare(b *BlockBuilder, dst []byte) ([]byte, BlockInfo) {
 	body := encodeBlockInto(dst, &b.pending)
 	info := b.pendingInfo()
 	info.UncompressedSize = uint32(len(body))
-	b.reset()
+	BuilderReset(b)
 	return body, info
 }
 
-// reset drops the pending block while retaining column capacity.
-func (b *BlockBuilder) reset() { b.pending.reset() }
+// BuilderReset drops the pending block while retaining column capacity.
+func BuilderReset(b *BlockBuilder) { b.pending.reset() }
 
 // pendingBlock is the in-memory accumulator for the active block.
 // Per the spec §3.2 columnar layout: parallel column slices, not a

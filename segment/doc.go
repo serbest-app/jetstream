@@ -6,13 +6,17 @@
 // index) and a finalized 256-byte header carrying an xxh3 checksum
 // over the metadata.
 //
-// The package is split by responsibility: event.go, block.go, and
-// zstd.go define the row layout and block wire format; builder.go
-// accumulates events into a block and encodes it (BlockBuilder), with
-// no file behind it; writer.go owns the active-segment file state
-// machine (append, flush, fsync, seal) on top of a BlockBuilder;
-// header.go, footer.go, bloom.go, and collection.go are pure
-// encode/decode for footer sub-formats; seal.go computes the sealed
+// The package is split by responsibility. The block format lives in
+// internal/format: event.go, block.go, and zstd.go define the row layout
+// and block wire format; builder.go accumulates events into a block and
+// encodes it (BlockBuilder), with no file behind it; header.go and
+// footer.go encode and decode the sealed header and the block index.
+// format.go re-exports its public names here, and package segment/format
+// exposes the same names without this package's file I/O, for clients
+// that only decode blocks. In this package, writer.go owns the
+// active-segment file state machine (append, flush, fsync, seal) on top
+// of a BlockBuilder; bloom.go and collection.go are pure encode/decode
+// for footer sub-formats; seal.go computes the sealed
 // header and footer from a sequence of block frames (BuildSealed), or
 // from blocks indexed as they were written (IndexBlock, SealBuilder),
 // and writes them to the active file; rewrite.go computes a compacted

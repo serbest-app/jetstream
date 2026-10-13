@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/bluesky-social/jetstream/segment/internal/format"
 	"github.com/cockroachdb/pebble/vfs"
 )
 
@@ -111,7 +112,7 @@ func computeRewrite(r *Reader, decide func(*Event) RowDecision) (rewritePlan, er
 		if err != nil {
 			return rewritePlan{}, fmt.Errorf("segment: rewrite read block %d: %w", i, err)
 		}
-		events, uncompressedSize, err := decodeBlockCompressedSized(frame)
+		events, uncompressedSize, err := format.DecodeBlockCompressedSized(frame)
 		if err != nil {
 			return rewritePlan{}, fmt.Errorf("segment: rewrite decode block %d: %w", i, err)
 		}
@@ -132,10 +133,10 @@ func computeRewrite(r *Reader, decide func(*Event) RowDecision) (rewritePlan, er
 		if droppedInBlock {
 			blocksTouched++
 			if len(kept) == 0 {
-				outFrame = encodeEmptyBlockCompressed()
-				outUncompressedSize = len(encodeEmptyBlock())
+				outFrame = format.EncodeEmptyBlockCompressed()
+				outUncompressedSize = len(format.EncodeEmptyBlock())
 			} else {
-				outFrame, outUncompressedSize, err = encodeBlockCompressedSized(kept)
+				outFrame, outUncompressedSize, err = format.EncodeBlockCompressedSized(kept)
 				if err != nil {
 					return rewritePlan{}, fmt.Errorf("segment: rewrite encode block %d: %w", i, err)
 				}
@@ -177,8 +178,8 @@ func computeRewrite(r *Reader, decide func(*Event) RowDecision) (rewritePlan, er
 	newHeader.MinWitnessedAt = header.MinWitnessedAt
 	newHeader.MaxWitnessedAt = header.MaxWitnessedAt
 
-	headerBytes := encodeHeader(newHeader)
-	checksum := xxh3HeaderFooter(headerBytes, footerBytes)
+	headerBytes := format.EncodeHeader(newHeader)
+	checksum := format.XXH3HeaderFooter(headerBytes, footerBytes)
 	newHeader.Checksum = checksum
 	binary.LittleEndian.PutUint64(headerBytes[4:12], checksum)
 

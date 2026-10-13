@@ -1,4 +1,4 @@
-package segment
+package format
 
 import (
 	"encoding/binary"
@@ -66,13 +66,13 @@ func blockFrameRange(r io.ReaderAt, hdr Header, idx int) (uint64, uint32, error)
 		return 0, 0, fmt.Errorf("%w: footer_offset %d overflows int64",
 			ErrInvalidFooter, hdr.FooterOffset)
 	}
-	entryDelta := uint64(idx) * blockIndexEntrySize
+	entryDelta := uint64(idx) * BlockIndexEntrySize
 	if hdr.BlockIndexOffset > maxInt64 || entryDelta > maxInt64-hdr.BlockIndexOffset {
 		return 0, 0, fmt.Errorf("%w: block %d index entry offset overflows int64",
 			ErrInvalidFooter, idx)
 	}
 
-	entry := make([]byte, blockIndexEntrySize)
+	entry := make([]byte, BlockIndexEntrySize)
 	entryOff := int64(hdr.BlockIndexOffset + entryDelta)
 	if _, err := r.ReadAt(entry, entryOff); err != nil {
 		return 0, 0, fmt.Errorf("segment: read block %d index entry: %w", idx, err)
@@ -114,5 +114,5 @@ func blockFrameRange(r io.ReaderAt, hdr Header, idx int) (uint64, uint32, error)
 // call (not shared across frames), but callers that retain fields beyond the
 // events' lifetime should clone them.
 func DecodeBlockFrame(frame []byte) ([]Event, error) {
-	return decodeBlockCompressed(frame)
+	return DecodeBlockCompressed(frame)
 }
